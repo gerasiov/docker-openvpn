@@ -500,15 +500,18 @@ def parse_args(config: Config) -> argparse.Namespace:
     add_argument(init_parser,
                  'route',
                  help='Additional route to push to clients',
+                 dest='routes',
                  action='append')
 
     add_argument(init_parser,
                  'extra-server-config',
                  help='Extra server configuration',
+                 dest='extra_server_configs',
                  action='append')
     add_argument(init_parser,
                  'extra-client-config',
                  help='Extra client configuration',
+                 dest='extra_client_configs',
                  action='append')
 
     start_parser = action_parsers.add_parser('start',
