@@ -392,10 +392,18 @@ def get_client_config(config: Config, client_name: str) -> int:
 
 
 def parse_args(config: Config) -> argparse.Namespace:
+    class replace_append(argparse.Action):    # noqa N801
+        def __call__(self, parser, namespace, values, option_string=None):
+            if getattr(namespace, self.dest, None) is None:
+                setattr(namespace, self.dest, [])
+            getattr(namespace, self.dest).append(values)
+
     def add_argument(_parser: argparse.ArgumentParser, arg: str, **kwargs):
         config_var = arg.replace('-', '_')
         if kwargs.get('action') == 'append':
+            kwargs['action'] = replace_append
             config_var += 's'
+            kwargs['dest'] = config_var
         if config_var in config.__dict__:
             default = config.__dict__[config_var]
             if default is None:
@@ -405,6 +413,14 @@ def parse_args(config: Config) -> argparse.Namespace:
 
         if 'default' in kwargs:
             kwargs['help'] = f'{kwargs["help"]} (default: {kwargs["default"]})'
+
+        if kwargs.get('action') == replace_append:
+            _parser = _parser.add_mutually_exclusive_group()  # type: ignore[assignment]
+            _parser.add_argument(f'--no-{arg}s',
+                                 action='store_const',
+                                 const=[],
+                                 dest=config_var,
+                                 help=f'Clear {arg}')
         _parser.add_argument(f'--{arg}', **kwargs)
 
     def add_tristate_argument(_parser: argparse.ArgumentParser, arg: str, **kwargs):
@@ -500,18 +516,15 @@ def parse_args(config: Config) -> argparse.Namespace:
     add_argument(init_parser,
                  'route',
                  help='Additional route to push to clients',
-                 dest='routes',
                  action='append')
 
     add_argument(init_parser,
                  'extra-server-config',
                  help='Extra server configuration',
-                 dest='extra_server_configs',
                  action='append')
     add_argument(init_parser,
                  'extra-client-config',
                  help='Extra client configuration',
-                 dest='extra_client_configs',
                  action='append')
 
     start_parser = action_parsers.add_parser('start',

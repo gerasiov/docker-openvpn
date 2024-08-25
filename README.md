@@ -51,17 +51,16 @@ docker run --rm -it  gerasiov/openvpn init --help
 ```
 
 ```
-usage: control init [-h] [--ca-pass | --no-ca-pass] --server SERVER
-                    [--protocol {udp,tcp}] [--port PORT] [--network NETWORK]
-                    [--device {tun,tap}] [--interface INTERFACE]
-                    [--nat | --no-nat] [--comp-lzo | --no-comp-lzo]
-                    [--dns-server DNS_SERVER]
+usage: control init [-h] [--ca-pass | --no-ca-pass] --server SERVER [--protocol {udp,tcp}]
+                    [--port PORT] [--network NETWORK] [--device {tun,tap}]
+                    [--interface INTERFACE] [--nat | --no-nat] [--comp-lzo | --no-comp-lzo]
+                    [--no-dns-servers | --dns-server DNS_SERVERS]
                     [--duplicate-cn | --no-duplicate-cn]
                     [--block-outside-dns | --no-block-outside-dns]
                     [--client-to-client | --no-client-to-client]
-                    [--default-route | --no-default-route] [--route ROUTE]
-                    [--extra-server-config EXTRA_SERVER_CONFIG]
-                    [--extra-client-config EXTRA_CLIENT_CONFIG]
+                    [--default-route | --no-default-route] [--no-routes | --route ROUTES]
+                    [--no-extra-server-configs | --extra-server-config EXTRA_SERVER_CONFIGS]
+                    [--no-extra-client-configs | --extra-client-config EXTRA_CLIENT_CONFIGS]
 
 options:
   -h, --help            show this help message and exit
@@ -74,12 +73,12 @@ options:
   --device {tun,tap}    Device to use (default: tun)
   --interface INTERFACE
                         Interface to use (default: eth0)
-  --nat                 NAT (masquerade) traffic from clients to the internet
-                        (default)
+  --nat                 NAT (masquerade) traffic from clients to the internet (default)
   --no-nat              Disable nat
   --comp-lzo            Enable LZO compression (DEPRECATED)
   --no-comp-lzo         Disable comp-lzo (default)
-  --dns-server DNS_SERVER
+  --no-dns-servers      Clear dns-server
+  --dns-server DNS_SERVERS
                         DNS server to use (default: ['8.8.8.8', '1.1.1.1'])
   --duplicate-cn        Allow multiple clients with same CN
   --no-duplicate-cn     Disable duplicate-cn (default)
@@ -91,10 +90,15 @@ options:
                         Disable client-to-client (default)
   --default-route       Push default route to clients (default)
   --no-default-route    Disable default-route
-  --route ROUTE         Additional route to push to clients (default: [])
-  --extra-server-config EXTRA_SERVER_CONFIG
+  --no-routes           Clear route
+  --route ROUTES        Additional route to push to clients (default: [])
+  --no-extra-server-configs
+                        Clear extra-server-config
+  --extra-server-config EXTRA_SERVER_CONFIGS
                         Extra server configuration (default: [])
-  --extra-client-config EXTRA_CLIENT_CONFIG
+  --no-extra-client-configs
+                        Clear extra-client-config
+  --extra-client-config EXTRA_CLIENT_CONFIGS
                         Extra client configuration (default: [])
 ```
 
