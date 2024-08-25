@@ -279,8 +279,6 @@ def new_client(config: Config, client_name: str, key_pass) -> int:
                     (['nopass'] if not key_pass else []))
     if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt')):
         run_command([*EASYRSA, 'sign-req', 'client', client_name])
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'private', f'{client_name}.key')):
-        run_command([*EASYRSA, 'export-p12', client_name])
 
     return 0
 
