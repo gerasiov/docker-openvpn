@@ -336,10 +336,10 @@ def list_clients(config: Config) -> int:
                     if error_code == '10':
                         print(f'{client}, expired on {expiration_date}')
                         break
-                    elif error_code == '23':
+                    if error_code == '23':
                         print(f'{client}, revoked')
                         break
-                    elif error_code == '26':
+                    if error_code == '26':
                         print(f'{client}, not sslclient certificate')
                         break
             else:
@@ -580,17 +580,17 @@ def main():
 
     if args.action == 'start':
         return start(config)
-    elif args.action == 'new-client':
+    if args.action == 'new-client':
         return new_client(config, args.client_name, args.key_pass)
-    elif args.action == 'revoke-client':
+    if args.action == 'revoke-client':
         return revoke_client(config, args.client_name)
-    elif args.action == 'renew-client':
+    if args.action == 'renew-client':
         return renew_client(config, args.client_name)
-    elif args.action == 'list-clients':
+    if args.action == 'list-clients':
         return list_clients(config)
-    elif args.action == 'show-client':
+    if args.action == 'show-client':
         return show_client(config, args.client_name)
-    elif args.action == 'get-client-config':
+    if args.action == 'get-client-config':
         return get_client_config(config, args.client_name)
 
     raise NotImplementedError(f'Action {args.action} not implemented.')
