@@ -227,6 +227,9 @@ def init_openvpn(config: Config):
 
 
 def init(config: Config, args: argparse.Namespace) -> int:
+    if args.ca_pass and not sys.stdin.isatty():
+        logger.error('CA password required, but stdin is not a tty.')
+        return 1
     init_easy_rsa(config, args)
     init_openvpn(config)
     logger.info('Initialization complete.')
@@ -265,6 +268,10 @@ def start(config: Config) -> int:
 
 
 def new_client(config: Config, client_name: str, key_pass) -> int:
+    if key_pass and not sys.stdin.isatty():
+        logger.error('Key password required, but stdin is not a tty.')
+        return 1
+
     # TODO: Handle already existing clients
     logger.info(f'Creating new client {client_name}')
     if not os.path.exists(os.path.join(EASYRSA_PKI, 'reqs', f'{client_name}.req')):
