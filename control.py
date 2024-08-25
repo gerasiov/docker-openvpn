@@ -118,7 +118,7 @@ class Config:
                args: argparse.Namespace | None = None):
         # Load config file
         if config_file and os.path.exists(config_file):
-            with open(config_file) as f:
+            with open(config_file, encoding='utf-8') as f:
                 config_data = json.load(f)
                 for key in self.__dict__:
                     self.update_attr(key, config_data.get(key))
@@ -135,7 +135,7 @@ class Config:
                 self.update_attr(key, args.__dict__.get(key))
 
     def save(self, config_file: str) -> None:
-        with open(config_file, 'w') as f:
+        with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(self.__dict__, f, indent=2)
 
 
@@ -222,7 +222,7 @@ def init_openvpn(config: Config):
 
     config_options.extend(config.extra_server_configs)
 
-    with open(os.path.join(OPENVPN_DIR, 'server.conf'), 'w') as f:
+    with open(os.path.join(OPENVPN_DIR, 'server.conf'), 'w', encoding='utf-8') as f:
         f.writelines(line + '\n' for line in config_options)
 
 
@@ -352,7 +352,7 @@ def show_client(config: Config, client_name: str) -> int:
     if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt')):
         logger.error(f'Client {client_name} does not exist')
         return 1
-    with open(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt')) as f:
+    with open(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt'), encoding='utf-8') as f:
         print(f.read())
     return 0
 
@@ -384,7 +384,7 @@ def get_client_config(config: Config, client_name: str) -> int:
         'tls-auth': f'{OPENVPN_DIR}/ta.key',
     }.items():
         sys.stdout.write(f'<{key}>\n')
-        with open(file) as f:
+        with open(file, encoding='utf-8') as f:
             sys.stdout.write(f.read())
         sys.stdout.write(f'</{key}>\n')
 
