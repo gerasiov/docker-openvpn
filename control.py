@@ -201,7 +201,9 @@ def init_openvpn(config: Config):
         'group nogroup',
     ]
     for subnet in config.routes + [config.network]:
-        config_options.append(f'push "route {normalize_address(subnet)}"')
+        subnet_split = subnet.split(' ')
+        subnet = ' '.join([normalize_address(subnet_split[0]), *subnet_split[1:]])
+        config_options.append(f'push "route {subnet}"')
 
     for dns_server in config.dns_servers:
         config_options.append(f'push "dhcp-option DNS {dns_server}"')
