@@ -194,6 +194,7 @@ To enable IPv6 support inside the tunnel, specify `--ipv6` parameter when initia
 To enable IPv6 support for the Docker daemon, add the following configuration to the Docker daemon configuration file (`/etc/docker/daemon.json`):
 ```json
 {
+  "experimental": true,
   "ipv6": true,
   "ip6tables": true,
   "fixed-cidr-v6": "fd00:1::/64"
