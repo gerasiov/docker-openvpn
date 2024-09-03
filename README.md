@@ -23,6 +23,8 @@ Initialize the OpenVPN server configuration (see below for more options):
 docker run --rm -it -v /srv/services/openvpn:/data gerasiov/openvpn init --server vpn.example.com --port 7777 --no-ca-pass
 ```
 
+You can always modify the server configuration by calling `init` again with different options. `init --help` will show you all available options and current default (loaded from config). 
+
 Create a new client certificate:
 ```sh
 docker run --rm -it -v /srv/services/openvpn:/data gerasiov/openvpn new-client client1
