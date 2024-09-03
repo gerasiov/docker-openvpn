@@ -369,7 +369,7 @@ def get_client_config(config: Config, client_name: str) -> int:
         'client',
         'nobind',
         f'dev {config.device}',
-        f'remote {config.server} {config.port} {config.protocol}',
+        f'remote {config.server} {config.port} {config.protocol.removesuffix("6")}',
         'remote-cert-tls server',
         'key-direction 1'
     ]
@@ -477,7 +477,7 @@ def parse_args(config: Config) -> argparse.Namespace:
                  help='Server name')
     add_argument(init_parser,
                  'protocol',
-                 choices=['udp', 'tcp'],
+                 choices=['udp', 'udp6', 'tcp', 'tcp6'],
                  help='Server protocol')
     add_argument(init_parser,
                  'port',
