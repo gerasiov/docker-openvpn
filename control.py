@@ -200,7 +200,7 @@ def init_openvpn(config: Config):
         'user nobody',
         'group nogroup',
     ]
-    for subnet in config.routes + [config.network]:
+    for subnet in config.routes:
         subnet_split = subnet.split(' ')
         subnet = ' '.join([normalize_address(subnet_split[0]), *subnet_split[1:]])
         config_options.append(f'push "route {subnet}"')
