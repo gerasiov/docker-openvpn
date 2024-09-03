@@ -181,6 +181,65 @@ To get a client configuration file, use the `get-client-config` command with the
 docker run --rm -it gerasiov/openvpn get-client-config <client_name>
 ```
 
+## IPv6 Support
+### IPv6 server address
+To allow connections to the OpenVPN server over IPv6, specify `--proto udp6` or `--proto tcp6` when initializing the server. The server will listen on both IPv4 and IPv6 addresses.
+
+### IPv6 network inside the tunnel
+To enable IPv6 support inside the tunnel, specify `--ipv6` parameter when initializing the server. Take a note, that most options (nat, default-route, routes, etc.) could be set for IPv6 separately from IPv4.
+
+### Recommended docker configuration for IPv6 support
+To enable IPv6 support for the Docker daemon, add the following configuration to the Docker daemon configuration file (`/etc/docker/daemon.json`):
+```json
+{
+  "ipv6": true,
+  "ip6tables": true,
+  "fixed-cidr-v6": "fd00:1::/64"
+}
+```
+
+It is also recommended to disable docker's userland proxy for better performance and compatibility with IPv6. Add the following configuration to the Docker daemon configuration file (`/etc/docker/daemon.json`):
+```json
+  "userland-proxy": false,
+```
+ 
+When starting the docker container you might have to enable IPv6 forwarding in it with the following docker run options:
+```sh
+ --sysctl net.ipv6.conf.default.disable_ipv6=0 --sysctl net.ipv6.conf.all.forwarding=1
+```
+so the full command to start the container with IPv6 support would be:
+```sh
+docker run -v /srv/services/openvpn:/data --cap-add=NET_ADMIN --sysctl net.ipv6.conf.default.disable_ipv6=0 --sysctl net.ipv6.conf.all.forwarding=1 -p 7777:1194/udp gerasiov/openvpn 
+```
+
+### IPv6 support with docker-compose
+When using docker-compose you will need to add the following to the service configuration:
+```yaml
+    sysctls:
+      - net.ipv6.conf.default.disable_ipv6=0
+      - net.ipv6.conf.all.forwarding=1
+```
+and possibly use default brigde network, configured in previous section, as the service network.
+```yaml
+    network_mode: bridge
+```
+so the full service configuration would be:
+```yaml
+  openvpn:
+    image: gerasiov/openvpn
+    restart: unless-stopped
+    ports:
+      - "7777:1194/udp"
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.default.disable_ipv6=0
+      - net.ipv6.conf.all.forwarding=1
+    volumes:
+      - /srv/services/openvpn:/data
+    network_mode: bridge
+```
+
 ## Contributions
 
 Contributions are welcome! Please submit pull requests or open issues on the [GitHub repository](https://github.com/gerasiov/docker-openvpn).
