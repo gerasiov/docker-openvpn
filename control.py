@@ -21,6 +21,7 @@
 
 import ipaddress
 import json
+import random
 import stat
 import sys
 from dataclasses import dataclass, field, InitVar
@@ -51,23 +52,36 @@ def normalize_address(address: str) -> str:
         return address
 
 
+def generate_ula_network() -> str:
+    ula_supernet = ipaddress.IPv6Network("fd00::/8")
+    ula_size = 64  # OpenVPN requires /64 subnet
+    radnom_part = random.getrandbits(ula_supernet.max_prefixlen - ula_supernet.prefixlen - ula_size) << ula_size
+    network = ipaddress.IPv6Network((ula_supernet.network_address + radnom_part, ula_size))
+    return str(network.network_address) + '/' + str(network.prefixlen)
+
+
 @dataclass
 class Config:
     config_file: InitVar[str]
 
     server: str | None = None
+    ipv6: bool = False
     network: str = '172.30.0.0/16'
+    network6: str | None = None
     routes: list[str] = field(default_factory=list)
+    route6s: list[str] = field(default_factory=list)
     protocol: str = 'udp'
     port: int = 1194
     device: str = 'tun'
     interface: str = 'eth0'
     nat: bool = True
+    nat6: bool | None = None
     dns_servers: list[str] = field(default_factory=lambda: ['8.8.8.8', '1.1.1.1'])
     client_to_client: bool = False
     duplicate_cn: bool = False
     comp_lzo: bool = False
     default_route: bool = True
+    default_route6: bool | None = None
     block_outside_dns: bool = True
     extra_server_configs: list[str] = field(default_factory=list)
     extra_client_configs: list[str] = field(default_factory=list)
@@ -111,6 +125,9 @@ class Config:
             raise ValueError('Server\'s hostname not set')
         if '/' not in self.network:
             raise ValueError('Network should be in CIDR format')
+        if self.ipv6:
+            if '/' not in self.network6:
+                raise ValueError('IPv6 network should be in CIDR format')
 
     def update(self,
                config_file: str | None = None,
@@ -133,6 +150,14 @@ class Config:
             # Load command line arguments
             for key in self.__dict__:
                 self.update_attr(key, args.__dict__.get(key))
+
+        if self.ipv6:
+            if self.network6 is None:
+                self.network6 = generate_ula_network()
+            if self.default_route6 is None:
+                self.default_route6 = self.default_route
+            if self.nat6 is None:
+                self.nat6 = self.nat
 
     def save(self, config_file: str) -> None:
         with open(config_file, 'w', encoding='utf-8') as f:
@@ -200,10 +225,17 @@ def init_openvpn(config: Config):
         'user nobody',
         'group nogroup',
     ]
+
+    if config.network6:
+        config_options.append(f'server-ipv6 {config.network6}')
+
     for subnet in config.routes:
         subnet_split = subnet.split(' ')
         subnet = ' '.join([normalize_address(subnet_split[0]), *subnet_split[1:]])
         config_options.append(f'push "route {subnet}"')
+
+    for subnet in config.route6s:
+        config_options.append(f'push "route-ipv6 {subnet}"')
 
     for dns_server in config.dns_servers:
         config_options.append(f'push "dhcp-option DNS {dns_server}"')
@@ -244,9 +276,23 @@ def start(config: Config) -> int:
     if not os.path.exists('/dev/net/tun'):
         os.mknod('/dev/net/tun', mode=stat.S_IFCHR, device=os.makedev(10, 200))
 
-    with open('/proc/sys/net/ipv4/ip_forward', 'r') as f:
-        if f.read().strip() != '1':
-            logger.warning('IP forwarding is not enabled')
+    def check_sysctl(name, sysctl, value, error=False):
+        with open(os.path.join('/proc/sys', *sysctl.split('.')), 'r') as f:
+            current_value = f.read().strip()
+            if current_value != str(value):
+                msg = f'{name} is set to {current_value}. Set it with sysctl "{sysctl}={value}"'
+                if error:
+                    logger.error(msg)
+                    raise RuntimeError(msg)
+                else:
+                    logger.warning(msg)
+
+    check_sysctl('IPv4 forwarding', 'net.ipv4.ip_forward', 1, error=False)
+
+    if config.ipv6:
+        check_sysctl('IPv6 disable', 'net.ipv6.conf.default.disable_ipv6', 0, error=True)
+        check_sysctl('IPv6 disable', f'net.ipv6.conf.{config.interface}.disable_ipv6', 0, error=False)
+        check_sysctl('IPv6 forwarding', 'net.ipv6.conf.all.forwarding', 1, error=False)
 
     if config.nat:
         # silently remove existing iptables rule if exists
@@ -262,6 +308,23 @@ def start(config: Config) -> int:
                      '-t', 'nat',
                      '-A', 'POSTROUTING',
                      '-s', config.network,
+                     '-o', config.interface,
+                     '-j', 'MASQUERADE'])
+
+    if config.ipv6 and config.nat6:
+        # silently remove existing iptables rule if exists
+        run_command(['ip6tables',
+                     '-t', 'nat',
+                     '-D', 'POSTROUTING',
+                     '-s', config.network6,
+                     '-o', config.interface,
+                     '-j', 'MASQUERADE'],
+                    check=False,
+                    stderr=subprocess.DEVNULL)
+        run_command(['ip6tables',
+                     '-t', 'nat',
+                     '-A', 'POSTROUTING',
+                     '-s', config.network6,
                      '-o', config.interface,
                      '-j', 'MASQUERADE'])
 
@@ -374,8 +437,16 @@ def get_client_config(config: Config, client_name: str) -> int:
         'key-direction 1'
     ]
     config_options.extend(config.extra_client_configs)
+
+    redirect_gateway = []
     if config.default_route:
-        config_options.append('redirect-gateway def1')
+        redirect_gateway.append('def1')
+    if config.default_route6:
+        redirect_gateway.append('ipv6')
+    if redirect_gateway and not config.default_route:
+        redirect_gateway.append('!ipv4')
+    if redirect_gateway:
+        config_options.append(f'redirect-gateway {" ".join(redirect_gateway)}')
 
     sys.stdout.writelines(line + '\n' for line in config_options)
 
@@ -409,7 +480,8 @@ def parse_args(config: Config) -> argparse.Namespace:
         if config_var in config.__dict__:
             default = config.__dict__[config_var]
             if default is None:
-                kwargs['required'] = True
+                if 'required' not in kwargs:
+                    kwargs['required'] = True
             else:
                 kwargs['default'] = config.__dict__[config_var]
 
@@ -482,9 +554,16 @@ def parse_args(config: Config) -> argparse.Namespace:
     add_argument(init_parser,
                  'port',
                  help='Server port')
+    add_tristate_argument(init_parser,
+                          'ipv6',
+                          help='Enable IPv6 support')
     add_argument(init_parser,
                  'network',
                  help='Network CIDR to use')
+    add_argument(init_parser,
+                 'network6',
+                 required=False,
+                 help='IPv6 network CIDR to use (generate ULA if unset)')
     add_argument(init_parser,
                  'device',
                  choices=['tun', 'tap'],
@@ -496,9 +575,11 @@ def parse_args(config: Config) -> argparse.Namespace:
                           'nat',
                           help='NAT (masquerade) traffic from clients to the internet')
     add_tristate_argument(init_parser,
+                          'nat6',
+                          help='NAT (masquerade) IPv6 traffic from clients to the internet (equal to --nat if unset)')
+    add_tristate_argument(init_parser,
                           'comp-lzo',
                           help='Enable LZO compression (DEPRECATED)')
-
     add_argument(init_parser,
                  'dns-server',
                  help='DNS server to use',
@@ -514,10 +595,17 @@ def parse_args(config: Config) -> argparse.Namespace:
                           help='Enable client-to-client communication')
     add_tristate_argument(init_parser,
                           'default-route',
-                          help='Push default route to clients')
+                          help='Push default IPv4 route to clients')
+    add_tristate_argument(init_parser,
+                          'default-route6',
+                          help='Push default IPv6 route to clients (equal to --default-route if unset)')
     add_argument(init_parser,
                  'route',
-                 help='Additional route to push to clients',
+                 help='Additional IPv4 route to push to clients',
+                 action='append')
+    add_argument(init_parser,
+                 'route6',
+                 help='Additional IPv6 route to push to clients',
                  action='append')
 
     add_argument(init_parser,

@@ -51,14 +51,20 @@ docker run --rm -it  gerasiov/openvpn init --help
 ```
 
 ```
-usage: control init [-h] [--ca-pass | --no-ca-pass] --server SERVER [--protocol {udp,tcp}]
-                    [--port PORT] [--network NETWORK] [--device {tun,tap}]
-                    [--interface INTERFACE] [--nat | --no-nat] [--comp-lzo | --no-comp-lzo]
+usage: control init [-h] [--ca-pass | --no-ca-pass] --server SERVER
+                    [--protocol {udp,udp6,tcp,tcp6}] [--port PORT]
+                    [--ipv6 | --no-ipv6] [--network NETWORK]
+                    [--network6 NETWORK6] [--device {tun,tap}]
+                    [--interface INTERFACE] [--nat | --no-nat]
+                    [--nat6 | --no-nat6] [--comp-lzo | --no-comp-lzo]
                     [--no-dns-servers | --dns-server DNS_SERVERS]
                     [--duplicate-cn | --no-duplicate-cn]
                     [--block-outside-dns | --no-block-outside-dns]
                     [--client-to-client | --no-client-to-client]
-                    [--default-route | --no-default-route] [--no-routes | --route ROUTES]
+                    [--default-route | --no-default-route]
+                    [--default-route6 | --no-default-route6]
+                    [--no-routes | --route ROUTES]
+                    [--no-route6s | --route6 ROUTE6S]
                     [--no-extra-server-configs | --extra-server-config EXTRA_SERVER_CONFIGS]
                     [--no-extra-client-configs | --extra-client-config EXTRA_CLIENT_CONFIGS]
 
@@ -67,14 +73,22 @@ options:
   --ca-pass             Require password for CA key (default)
   --no-ca-pass          Disable ca-pass
   --server SERVER       Server name
-  --protocol {udp,tcp}  Server protocol (default: udp)
+  --protocol {udp,udp6,tcp,tcp6}
+                        Server protocol (default: udp)
   --port PORT           Server port (default: 1194)
+  --ipv6                Enable IPv6 support
+  --no-ipv6             Disable ipv6 (default)
   --network NETWORK     Network CIDR to use (default: 172.30.0.0/16)
+  --network6 NETWORK6   IPv6 network CIDR to use (generate ULA if unset)
   --device {tun,tap}    Device to use (default: tun)
   --interface INTERFACE
                         Interface to use (default: eth0)
-  --nat                 NAT (masquerade) traffic from clients to the internet (default)
+  --nat                 NAT (masquerade) traffic from clients to the internet
+                        (default)
   --no-nat              Disable nat
+  --nat6                NAT (masquerade) IPv6 traffic from clients to the
+                        internet (equal to --nat if unset) (default: unset)
+  --no-nat6             Disable nat6
   --comp-lzo            Enable LZO compression (DEPRECATED)
   --no-comp-lzo         Disable comp-lzo (default)
   --no-dns-servers      Clear dns-server
@@ -88,10 +102,15 @@ options:
   --client-to-client    Enable client-to-client communication
   --no-client-to-client
                         Disable client-to-client (default)
-  --default-route       Push default route to clients (default)
+  --default-route       Push default IPv4 route to clients (default)
   --no-default-route    Disable default-route
+  --default-route6      Push default IPv6 route to clients (equal to
+                        --default-route if unset) (default: unset)
+  --no-default-route6   Disable default-route6
   --no-routes           Clear route
-  --route ROUTES        Additional route to push to clients (default: [])
+  --route ROUTES        Additional IPv4 route to push to clients (default: [])
+  --no-route6s          Clear route6
+  --route6 ROUTE6S      Additional IPv6 route to push to clients (default: [])
   --no-extra-server-configs
                         Clear extra-server-config
   --extra-server-config EXTRA_SERVER_CONFIGS
