@@ -55,6 +55,7 @@ docker run --rm -it  gerasiov/openvpn init --help
 ```
 usage: control init [-h] [--ca-pass | --no-ca-pass] --server SERVER
                     [--protocol {udp,udp6,tcp,tcp6}] [--port PORT]
+                    [--restart-interval RESTART_INTERVAL]
                     [--ipv6 | --no-ipv6] [--network NETWORK]
                     [--network6 NETWORK6] [--device {tun,tap}]
                     [--interface INTERFACE] [--nat | --no-nat]
@@ -78,6 +79,8 @@ options:
   --protocol {udp,udp6,tcp,tcp6}
                         Server protocol (default: udp)
   --port PORT           Server port (default: 1194)
+  --restart-interval RESTART_INTERVAL
+                        Server restart interval in days (default: 30)
   --ipv6                Enable IPv6 support
   --no-ipv6             Disable ipv6 (default)
   --network NETWORK     Network CIDR to use (default: 172.30.0.0/16)
