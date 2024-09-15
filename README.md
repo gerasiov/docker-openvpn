@@ -222,7 +222,7 @@ When using docker-compose you will need to add the following to the service conf
       - net.ipv6.conf.default.disable_ipv6=0
       - net.ipv6.conf.all.forwarding=1
 ```
-and possibly use default brigde network, configured in previous section, as the service network.
+and possibly use default bridge network, configured in previous section, as the service network.
 ```yaml
     network_mode: bridge
 ```
