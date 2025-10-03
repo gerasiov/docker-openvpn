@@ -275,7 +275,7 @@ def update_crl(config: Config):
     os.chmod(os.path.join(EASYRSA_PKI, 'crl.pem'), 0o644)
 
 
-def start(config: Config) -> int:
+def start(config: Config, readonly: bool = False) -> int:
     logger.info('Preparing environment...')
     os.makedirs('/dev/net', exist_ok=True)
     if not os.path.exists('/dev/net/tun'):
@@ -292,7 +292,8 @@ def start(config: Config) -> int:
                 else:
                     logger.warning(msg)
 
-    renew_server_cert(config)
+    if not readonly:
+        renew_server_cert(config)
 
     check_sysctl('IPv4 forwarding', 'net.ipv4.ip_forward', 1, error=False)
 
@@ -685,6 +686,10 @@ def parse_args(config: Config) -> argparse.Namespace:
 
     start_parser = action_parsers.add_parser('start',
                                              help='Start OpenVPN server')
+    start_parser.add_argument('--readonly',
+                              action='store_true',
+                              help='Use /data in readonly mode, do not renew server certificate',
+                              default=False)
 
     new_client_parser = action_parsers.add_parser('new-client',
                                                   help='Create new client certificate')
@@ -748,7 +753,7 @@ def main():
         return 1
 
     if args.action == 'start':
-        return start(config)
+        return start(config, args.readonly)
     if args.action == 'new-client':
         return new_client(config, args.client_name, args.key_pass)
     if args.action == 'revoke-client':
