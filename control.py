@@ -17,18 +17,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
+import argparse
 import ipaddress
 import json
-import random
-import stat
-import sys
-from dataclasses import dataclass, field, InitVar
-import argparse
 import logging
 import os
+import random
+import stat
 import subprocess
+import sys
+from dataclasses import dataclass, field, InitVar
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +173,15 @@ def run_command(command: list[str], **kwargs) -> subprocess.CompletedProcess:
 
 def init_easy_rsa(config: Config, args: argparse.Namespace):
     logger.info('Initializing EasyRSA.')
-    no_pass = ['--no-pass'] if not args.ca_pass else []
+    if args.ca_pass:
+        if not os.path.exists(EASYRSA_PKI):  # Do not show message if already initialized
+            logger.info('CA key will be password protected, do not forget it.')
+            logger.info('Remember to manually renew server certificate when it expires.')
+        no_pass = []
+        server_cert_validity = 365 * 3
+    else:
+        no_pass = ['--no-pass']
+        server_cert_validity = config.restart_interval * 2
     if not os.path.exists(EASYRSA_PKI):
         run_command([*EASYRSA, 'init-pki'])
         os.chmod(EASYRSA_PKI, 0o711)
@@ -185,7 +192,8 @@ def init_easy_rsa(config: Config, args: argparse.Namespace):
     if not os.path.exists(os.path.join(EASYRSA_PKI, 'reqs', f'{SERVER_EASYRSA_ID}.req')):
         run_command([*EASYRSA, f'--req-cn={config.server}', 'gen-req', SERVER_EASYRSA_ID, 'nopass'])
     if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{SERVER_EASYRSA_ID}.crt')):
-        run_command([*EASYRSA, f'--days={config.restart_interval * 2}', 'sign-req', 'server', SERVER_EASYRSA_ID])
+        run_command([*EASYRSA, f'--days={server_cert_validity}', 'sign-req', 'server', SERVER_EASYRSA_ID])
+    update_crl()
 
 
 def init_openvpn(config: Config):
@@ -269,9 +277,11 @@ def init(config: Config, args: argparse.Namespace) -> int:
     return 0
 
 
-def update_crl(config: Config):
+def update_crl():
     logger.info('Updating CRL file.')
-    run_command([*EASYRSA, f'--days={config.restart_interval * 2}', 'gen-crl'])
+    server_expiration = get_cert_expiration(SERVER_EASYRSA_ID)
+    days = (server_expiration - datetime.now(tz=UTC)).days + 1  # Up to one day longer then server cert
+    run_command([*EASYRSA, f'--days={days}', 'gen-crl'])
     os.chmod(os.path.join(EASYRSA_PKI, 'crl.pem'), 0o644)
 
 
@@ -370,7 +380,7 @@ def revoke_client(config: Config, client_name: str) -> int:
         logger.error(f'Client {client_name} does not exist')
         return 1
     run_command([*EASYRSA, 'revoke', client_name])
-    update_crl(config)
+    update_crl()
     return 0
 
 
@@ -389,30 +399,47 @@ def renew_client(config: Config, client_name: str) -> int:
         logger.error(f'Client {client_name} does not exist')
         return 1
     renew_cert(client_name)
-    update_crl(config)
+    update_crl()
     return 0
 
 
-def renew_server_cert(config: Config, allow_encrypted: bool = False):
+def renew_server_cert(config: Config, allow_encrypted: bool = False, days: int | None = None) -> None:
     validity, date = check_cert_validity(
         SERVER_EASYRSA_ID,
-        purpose="sslserver",
-        time=2 * config.restart_interval * 24 * 60 * 60
+        purpose="sslserver"
     )
     with open(os.path.join(EASYRSA_PKI, 'private', 'ca.key'), 'r', encoding='utf-8') as f:
         ca_key_encrypted = 'ENCRYPTED' in f.read()
 
-    if validity != 'valid':
+    needs_renewal = (days is not None) or (validity != 'valid') or (date is None) or \
+                    ((date - datetime.now(tz=UTC)).days < config.restart_interval * 2)
+
+    if needs_renewal:
         if ca_key_encrypted and not allow_encrypted:
             logger.error('Server certificate needs renewal, but CA key is password protected.')
-            logger.error('Run the init command to renew the certificate.')
+            logger.error('Run the `renew-server` command to renew the certificate.')
             sys.exit(1)
-        logger.info('Server certificate should be renewed.')
-        renew_cert(SERVER_EASYRSA_ID, days=config.restart_interval * 3)
-    update_crl(config)
+        logger.info('Renewing server certificate.')
+        renew_cert(SERVER_EASYRSA_ID, days=days or config.restart_interval * 3)
+        update_crl()
 
 
-def check_cert_validity(name: str, purpose: str = "sslclient", time: int = 0) -> tuple[str, str | None]:
+def get_cert_expiration(name: str) -> datetime:
+    return datetime.fromisoformat(
+        run_command(
+            [
+                'openssl', 'x509',
+                '-noout',
+                '-enddate',
+                '-dateopt', 'iso_8601',
+                '-in', f'{EASYRSA_PKI}/issued/{name}.crt'
+            ],
+            stdout=subprocess.PIPE
+        ).stdout.decode('utf-8').split('=')[1].strip()
+    )
+
+
+def check_cert_validity(name: str, purpose: str = 'sslclient') -> tuple[str, datetime | None]:
     verify_result = run_command(['openssl', 'verify',
                                  '-crl_check_all',
                                  '-purpose', purpose,
@@ -421,34 +448,14 @@ def check_cert_validity(name: str, purpose: str = "sslclient", time: int = 0) ->
                                  f'{EASYRSA_PKI}/issued/{name}.crt'],
                                 stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, check=False)
 
-    if verify_result.returncode == 0 and time != 0:
-        # This one a bit hackish, as we will get no error in stderr and the result will be
-        # 'unknown error', None if the cert is expired.
-        # As we use it only for the server cert, it's Ok for now.
-        verify_result = run_command(['openssl', 'x509',
-                                     '-checkend', str(time),
-                                     '-noout',
-                                     '-in', f'{EASYRSA_PKI}/issued/{name}.crt'],
-                                    stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, check=False)
-
-    expiration_date = run_command(
-        [
-            'openssl', 'x509',
-            '-noout',
-            '-enddate',
-            '-in', f'{EASYRSA_PKI}/issued/{name}.crt'
-        ],
-        stdout=subprocess.PIPE
-    ).stdout.decode('utf-8').split('=')[1].strip()
-
     if verify_result.returncode == 0:
-        return 'valid', expiration_date
+        return 'valid', get_cert_expiration(name)
     else:
         for line in verify_result.stderr.decode('utf-8').split('\n'):
             if line.startswith('error'):
                 error_code = line.split()[1]
                 if error_code == '10':
-                    return 'expired', expiration_date
+                    return 'expired', get_cert_expiration(name)
                 if error_code == '23':
                     return 'revoked', None
                 if error_code == '26':
@@ -684,6 +691,13 @@ def parse_args(config: Config) -> argparse.Namespace:
                  help='Extra client configuration',
                  action='append')
 
+    renew_server_parser = action_parsers.add_parser('renew-server',
+                                                    help='Renew server certificate')
+    renew_server_parser.add_argument('--days',
+                                     default=365*3,
+                                     type=int,
+                                     help='Certificate validity in days (default: 365*3)')
+
     start_parser = action_parsers.add_parser('start',
                                              help='Start OpenVPN server')
     start_parser.add_argument('--readonly',
@@ -754,6 +768,8 @@ def main():
 
     if args.action == 'start':
         return start(config, args.readonly)
+    if args.action == 'renew-server':
+        return renew_server_cert(config, allow_encrypted=True, days=args.days)
     if args.action == 'new-client':
         return new_client(config, args.client_name, args.key_pass)
     if args.action == 'revoke-client':

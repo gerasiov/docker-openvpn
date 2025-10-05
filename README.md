@@ -126,6 +126,28 @@ options:
                         Extra client configuration (default: [])
 ```
 
+While it is possible to use encrypted CA keys (with `--ca-pass` option), it will require you to manually monitor your server cert validity and reissue the new one before the old one expires. More common way it to leave it unencrypted so the cert will be updated automatically when become close to expiration.
+
+### Reconfiguring the server
+
+You can always modify the server configuration by calling `init` again with different options. `init --help` will show you all available options and current default (loaded from config).
+
+### Renewing the server certificate
+
+To manually renew the server certificate (required if you use encrypted CA key), use the `renew-server` command.
+
+```sh
+docker run --rm -it gerasiov/openvpn renew-server
+```
+
+```
+usage: control renew-server [-h] [--days DAYS]
+
+options:
+  -h, --help   show this help message and exit
+  --days DAYS  Certificate validity in days (default: 365*3)
+```
+
 ### Creating a New Client
 
 To create a new client certificate, use the `new-client` command with the required options.
