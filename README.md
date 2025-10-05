@@ -73,8 +73,8 @@ usage: control init [-h] [--ca-pass | --no-ca-pass] --server SERVER
 
 options:
   -h, --help            show this help message and exit
-  --ca-pass             Require password for CA key (default)
-  --no-ca-pass          Disable ca-pass
+  --ca-pass             Require password for CA key
+  --no-ca-pass          Disable ca-pass (default)
   --server SERVER       Server name
   --protocol {udp,udp6,tcp,tcp6}
                         Server protocol (default: udp)

@@ -606,7 +606,7 @@ def parse_args(config: Config) -> argparse.Namespace:
     add_tristate_argument(init_parser,
                           'ca-pass',
                           help='Require password for CA key',
-                          default=True)
+                          default=False)
 
     add_argument(init_parser,
                  'server',
