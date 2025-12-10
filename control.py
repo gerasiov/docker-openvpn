@@ -419,8 +419,10 @@ def renew_server_cert(config: Config, allow_encrypted: bool = False, days: int |
             logger.error('Server certificate needs renewal, but CA key is password protected.')
             logger.error('Run the `renew-server` command to renew the certificate.')
             sys.exit(1)
-        logger.info('Renewing server certificate.')
-        renew_cert(SERVER_EASYRSA_ID, days=days or config.restart_interval * 3)
+        if not days:
+            days = config.restart_interval * 3
+        logger.info(f'Renewing server certificate for {days} days.')
+        renew_cert(SERVER_EASYRSA_ID, days=days)
         update_crl()
 
 
@@ -484,7 +486,7 @@ def list_clients(config: Config) -> int:
 
 
 def show_client(config: Config, client_name: str) -> int:
-    logger.info(f'Showing client {client_name}:')
+    logger.debug(f'Showing client {client_name}:')
     if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt')):
         logger.error(f'Client {client_name} does not exist')
         return 1
@@ -494,7 +496,7 @@ def show_client(config: Config, client_name: str) -> int:
 
 
 def get_client_config(config: Config, client_name: str) -> int:
-    logger.info(f'Getting client config for {client_name}:')
+    logger.debug(f'Getting client config for {client_name}:')
     if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt')):
         logger.error(f'Client {client_name} does not exist')
         return 1
@@ -749,7 +751,7 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    logger.info('Starting docker-openvpn script')
+    logger.debug('Starting docker-openvpn script')
     logger.debug(f'Action: {args.action}')
 
     if not os.path.exists(DATA_DIR):
