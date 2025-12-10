@@ -32,10 +32,10 @@ var (
 
 // Config represents the configuration for the OpenVPN server
 type Config struct {
-	Server              *string  `json:"server,omitempty"`
+	Server              *string  `json:"server"`
 	IPv6                bool     `json:"ipv6"`
 	Network             string   `json:"network"`
-	Network6            *string  `json:"network6,omitempty"`
+	Network6            *string  `json:"network6"`
 	Routes              []string `json:"routes"`
 	Route6s             []string `json:"route6s"`
 	Protocol            string   `json:"protocol"`
@@ -43,13 +43,13 @@ type Config struct {
 	Device              string   `json:"device"`
 	Interface           string   `json:"interface"`
 	NAT                 bool     `json:"nat"`
-	NAT6                *bool    `json:"nat6,omitempty"`
+	NAT6                *bool    `json:"nat6"`
 	DNSServers          []string `json:"dns_servers"`
 	ClientToClient      bool     `json:"client_to_client"`
 	DuplicateCN         bool     `json:"duplicate_cn"`
 	CompLZO             bool     `json:"comp_lzo"`
 	DefaultRoute        bool     `json:"default_route"`
-	DefaultRoute6       *bool    `json:"default_route6,omitempty"`
+	DefaultRoute6       *bool    `json:"default_route6"`
 	BlockOutsideDNS     bool     `json:"block_outside_dns"`
 	RestartInterval     int      `json:"restart_interval"`
 	ExtraServerConfigs  []string `json:"extra_server_configs"`
