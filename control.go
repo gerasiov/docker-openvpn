@@ -528,13 +528,19 @@ func getCertExpiration(name string) (time.Time, error) {
 		return time.Time{}, err
 	}
 
-	// Parse output like "notAfter=2025-12-10T20:22:57Z"
+	// Parse output like "notAfter=2025-12-10T20:22:57Z" or "notAfter=2025-12-10 20:22:57Z"
 	parts := strings.Split(strings.TrimSpace(output), "=")
 	if len(parts) != 2 {
 		return time.Time{}, fmt.Errorf("unexpected openssl output: %s", output)
 	}
 
-	return time.Parse(time.RFC3339, parts[1])
+	dateStr := strings.TrimSpace(parts[1])
+	
+	// OpenSSL's iso_8601 format can output either with 'T' or space separator
+	// Replace space with 'T' to ensure RFC3339 compliance
+	dateStr = strings.Replace(dateStr, " ", "T", 1)
+	
+	return time.Parse(time.RFC3339, dateStr)
 }
 
 // checkCertValidity checks if a certificate is valid
