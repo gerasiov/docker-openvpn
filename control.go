@@ -20,6 +20,9 @@ import (
 
 const (
 	serverEasyRsaID = "_server"
+	// Device numbers for /dev/net/tun
+	tunDeviceMajor  = 10
+	tunDeviceMinor  = 200
 )
 
 var (
@@ -639,16 +642,17 @@ func renewServerCert(config *Config, allowEncrypted bool, days *int) error {
 }
 
 // checkSysctl checks a sysctl value
-func checkSysctl(name, sysctl, expectedValue string, isError bool) {
+func checkSysctl(name, sysctl, expectedValue string, isError bool) error {
 	path := filepath.Join("/proc/sys", strings.ReplaceAll(sysctl, ".", "/"))
 	data, err := os.ReadFile(path)
 	if err != nil {
+		msg := fmt.Sprintf("Failed to read %s: %v", sysctl, err)
 		if isError {
-			logError("Failed to read %s: %v", sysctl, err)
-		} else {
-			logWarning("Failed to read %s: %v", sysctl, err)
+			logError(msg)
+			return fmt.Errorf("%s", msg)
 		}
-		return
+		logWarning(msg)
+		return nil
 	}
 
 	currentValue := strings.TrimSpace(string(data))
@@ -656,11 +660,11 @@ func checkSysctl(name, sysctl, expectedValue string, isError bool) {
 		msg := fmt.Sprintf("%s is set to %s. Set it with sysctl \"%s=%s\"", name, currentValue, sysctl, expectedValue)
 		if isError {
 			logError(msg)
-			panic(msg)
-		} else {
-			logWarning(msg)
+			return fmt.Errorf("%s", msg)
 		}
+		logWarning(msg)
 	}
+	return nil
 }
 
 // cmdInit handles the init command
@@ -691,7 +695,7 @@ func cmdStart(config *Config, readonly bool) error {
 	}
 
 	if _, err := os.Stat("/dev/net/tun"); os.IsNotExist(err) {
-		dev := int(makedev(10, 200))
+		dev := int(makedev(tunDeviceMajor, tunDeviceMinor))
 		if err := syscall.Mknod("/dev/net/tun", syscall.S_IFCHR|0666, dev); err != nil {
 			return err
 		}
@@ -703,12 +707,20 @@ func cmdStart(config *Config, readonly bool) error {
 		}
 	}
 
-	checkSysctl("IPv4 forwarding", "net.ipv4.ip_forward", "1", false)
+	if err := checkSysctl("IPv4 forwarding", "net.ipv4.ip_forward", "1", false); err != nil {
+		return err
+	}
 
 	if config.IPv6 {
-		checkSysctl("IPv6 disable", "net.ipv6.conf.default.disable_ipv6", "0", true)
-		checkSysctl("IPv6 disable", fmt.Sprintf("net.ipv6.conf.%s.disable_ipv6", config.Interface), "0", false)
-		checkSysctl("IPv6 forwarding", "net.ipv6.conf.all.forwarding", "1", false)
+		if err := checkSysctl("IPv6 disable", "net.ipv6.conf.default.disable_ipv6", "0", true); err != nil {
+			return err
+		}
+		if err := checkSysctl("IPv6 disable", fmt.Sprintf("net.ipv6.conf.%s.disable_ipv6", config.Interface), "0", false); err != nil {
+			return err
+		}
+		if err := checkSysctl("IPv6 forwarding", "net.ipv6.conf.all.forwarding", "1", false); err != nil {
+			return err
+		}
 	}
 
 	if config.NAT {
@@ -935,13 +947,18 @@ func cmdGetClientConfig(config *Config, clientName string) error {
 }
 
 // isatty checks if the file is a terminal
+// Uses a direct syscall to check terminal status
 func isatty(f *os.File) bool {
 	var termios syscall.Termios
 	_, _, err := syscall.Syscall6(syscall.SYS_IOCTL, f.Fd(), syscall.TCGETS, uintptr(unsafe.Pointer(&termios)), 0, 0, 0)
 	return err == 0
 }
 
-// makedev creates a device number from major and minor
+// makedev creates a device number from major and minor numbers
+// This follows the Linux makedev implementation:
+// - Lower 8 bits (0xff) are the minor device number
+// - Next 12 bits (0xfff00) are also part of minor (shifted left by 12)
+// - Bits 8-15 are the major device number
 func makedev(major, minor uint32) int {
 	return int((major << 8) | (minor & 0xff) | ((minor & 0xfff00) << 12))
 }
