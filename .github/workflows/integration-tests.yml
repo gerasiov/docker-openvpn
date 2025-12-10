@@ -32,7 +32,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          chmod +x test-integration.sh
-          ./test-integration.sh
+          chmod +x test-integration.py
+          ./test-integration.py
         env:
           DOCKER_IMAGE: gerasiov/openvpn:test

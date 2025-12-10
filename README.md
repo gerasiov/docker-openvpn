@@ -283,7 +283,14 @@ To run the integration tests locally:
 
 2. Run the test script:
    ```sh
-   ./test-integration.sh
+   ./test-integration.py
+   ```
+
+3. For verbose output (shows all docker commands and output):
+   ```sh
+   ./test-integration.py --verbose
+   # or
+   ./test-integration.py -v
    ```
 
 The test script will:
