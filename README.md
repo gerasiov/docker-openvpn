@@ -268,6 +268,45 @@ so the full service configuration would be:
     network_mode: bridge
 ```
 
+## Testing
+
+This project includes integration tests to verify the functionality of the OpenVPN server and client management commands.
+
+### Running Integration Tests
+
+To run the integration tests locally:
+
+1. Build the Docker image:
+   ```sh
+   docker build -t gerasiov/openvpn:test .
+   ```
+
+2. Run the test script:
+   ```sh
+   ./test-integration.py
+   ```
+
+3. For verbose output (shows all docker commands and output):
+   ```sh
+   ./test-integration.py --verbose
+   # or
+   ./test-integration.py -v
+   ```
+
+The test script will:
+- Initialize an OpenVPN server with various configurations
+- Create, list, revoke, and renew client certificates
+- Verify configuration updates (full and partial)
+- Test various options like IPv6, custom networks, DNS servers, and routes
+
+### Continuous Integration
+
+Integration tests are automatically run on:
+- Pull requests to the `main` branch
+- Pushes to the `main` branch
+
+The CI workflow builds the Docker image and runs the complete test suite to ensure all functionality works as expected.
+
 ## Contributions
 
 Contributions are welcome! Please submit pull requests or open issues on the [GitHub repository](https://github.com/gerasiov/docker-openvpn).
