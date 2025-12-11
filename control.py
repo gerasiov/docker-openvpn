@@ -31,12 +31,12 @@ from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = os.environ.get('OVPN_WORKDIR', './data')
-OPENVPN_DIR = os.path.join(DATA_DIR, 'openvpn')
-EASYRSA_PKI = os.path.join(DATA_DIR, 'pki')
+DATA_DIR = os.environ.get("OVPN_WORKDIR", "./data")
+OPENVPN_DIR = os.path.join(DATA_DIR, "openvpn")
+EASYRSA_PKI = os.path.join(DATA_DIR, "pki")
 
-EASYRSA = ['easyrsa', f'--pki={EASYRSA_PKI}', '--batch', '--silent']
-SERVER_EASYRSA_ID = '_server'
+EASYRSA = ["easyrsa", f"--pki={EASYRSA_PKI}", "--batch", "--silent"]
+SERVER_EASYRSA_ID = "_server"
 
 
 def parse_cidr(cidr: str) -> tuple[str, str]:
@@ -45,8 +45,8 @@ def parse_cidr(cidr: str) -> tuple[str, str]:
 
 
 def normalize_address(address: str) -> str:
-    if '/' in address:
-        return ' '.join(parse_cidr(address))
+    if "/" in address:
+        return " ".join(parse_cidr(address))
     else:
         return address
 
@@ -54,9 +54,16 @@ def normalize_address(address: str) -> str:
 def generate_ula_network() -> str:
     ula_supernet = ipaddress.IPv6Network("fd00::/8")
     ula_size = 64  # OpenVPN requires /64 subnet
-    radnom_part = random.getrandbits(ula_supernet.max_prefixlen - ula_supernet.prefixlen - ula_size) << ula_size
-    network = ipaddress.IPv6Network((ula_supernet.network_address + radnom_part, ula_size))
-    return str(network.network_address) + '/' + str(network.prefixlen)
+    random_part = (
+        random.getrandbits(
+            ula_supernet.max_prefixlen - ula_supernet.prefixlen - ula_size
+        )
+        << ula_size
+    )
+    network = ipaddress.IPv6Network(
+        (ula_supernet.network_address + random_part, ula_size)
+    )
+    return str(network.network_address) + "/" + str(network.prefixlen)
 
 
 @dataclass
@@ -65,17 +72,17 @@ class Config:
 
     server: str | None = None
     ipv6: bool = False
-    network: str = '172.30.0.0/16'
+    network: str = "172.30.0.0/16"
     network6: str | None = None
     routes: list[str] = field(default_factory=list)
     route6s: list[str] = field(default_factory=list)
-    protocol: str = 'udp'
+    protocol: str = "udp"
     port: int = 1194
-    device: str = 'tun'
-    interface: str = 'eth0'
+    device: str = "tun"
+    interface: str = "eth0"
     nat: bool = True
     nat6: bool | None = None
-    dns_servers: list[str] = field(default_factory=lambda: ['8.8.8.8', '1.1.1.1'])
+    dns_servers: list[str] = field(default_factory=lambda: ["8.8.8.8", "1.1.1.1"])
     client_to_client: bool = False
     duplicate_cn: bool = False
     comp_lzo: bool = False
@@ -100,42 +107,48 @@ class Config:
         attr_type = type(self.__dict__[attr])
         value_type = type(value)
         if attr_type != value_type:
-            if attr_type == bool:
-                if value_type == str:
-                    value = value.lower() in ['yes', 'true', '1']
+            if attr_type is bool:
+                if value_type is str:
+                    value = value.lower() in ["yes", "true", "1"]
                 else:
                     value = bool(value)
-            elif attr_type == list:
-                if value_type == str:
-                    value = value.split(',')
+            elif attr_type is list:
+                if value_type is str:
+                    value = value.split(",")
                 else:
                     value = list(value)
-            elif attr_type == str:
+            elif attr_type is str:
                 value = str(value)
-            elif attr_type == int:
+            elif attr_type is int:
                 value = int(value)
             else:
-                raise ValueError(f'Could not update attribute {attr} of type {attr_type} '
-                                 f'to value {value} of type {value_type}')
+                raise ValueError(
+                    f"Could not update attribute {attr} of type {attr_type} "
+                    f"to value {value} of type {value_type}"
+                )
         self.__dict__[attr] = value
 
     def validate(self) -> None:
         # Check for required attributes
         if not self.server:
-            raise ValueError('Server\'s hostname not set')
-        if '/' not in self.network:
-            raise ValueError('Network should be in CIDR format')
+            raise ValueError("Server's hostname not set")
+        if "/" not in self.network:
+            raise ValueError("Network should be in CIDR format")
         if self.ipv6:
-            if '/' not in self.network6:
-                raise ValueError('IPv6 network should be in CIDR format')
+            if self.network6 is None:
+                raise ValueError("IPv6 network not set")
+            if "/" not in self.network6:
+                raise ValueError("IPv6 network should be in CIDR format")
 
-    def update(self,
-               config_file: str | None = None,
-               env: dict | None = None,
-               args: argparse.Namespace | None = None):
+    def update(
+        self,
+        config_file: str | None = None,
+        env: dict | None = None,
+        args: argparse.Namespace | None = None,
+    ):
         # Load config file
         if config_file and os.path.exists(config_file):
-            with open(config_file, encoding='utf-8') as f:
+            with open(config_file, encoding="utf-8") as f:
                 config_data = json.load(f)
                 for key in self.__dict__:
                     self.update_attr(key, config_data.get(key))
@@ -160,85 +173,110 @@ class Config:
                 self.nat6 = self.nat
 
     def save(self, config_file: str) -> None:
-        with open(config_file, 'w', encoding='utf-8') as f:
+        with open(config_file, "w", encoding="utf-8") as f:
             json.dump(self.__dict__, f, indent=2)
 
 
 def run_command(command: list[str], **kwargs) -> subprocess.CompletedProcess:
-    logger.debug(f'Running command: {" ".join(command)}')
-    if 'check' not in kwargs:
-        kwargs['check'] = True
+    logger.debug(f"Running command: {' '.join(command)}")
+    if "check" not in kwargs:
+        kwargs["check"] = True
     return subprocess.run(command, **kwargs)
 
 
 def init_easy_rsa(config: Config, args: argparse.Namespace):
-    logger.info('Initializing EasyRSA.')
+    logger.info("Initializing EasyRSA.")
     if args.ca_pass:
-        if not os.path.exists(EASYRSA_PKI):  # Do not show message if already initialized
-            logger.info('CA key will be password protected, do not forget it.')
-            logger.info('Remember to manually renew server certificate when it expires.')
+        if not os.path.exists(
+            EASYRSA_PKI
+        ):  # Do not show message if already initialized
+            logger.info("CA key will be password protected, do not forget it.")
+            logger.info(
+                "Remember to manually renew server certificate when it expires."
+            )
         no_pass = []
         server_cert_validity = 365 * 3
     else:
-        no_pass = ['--no-pass']
+        no_pass = ["--no-pass"]
         server_cert_validity = config.restart_interval * 2
     if not os.path.exists(EASYRSA_PKI):
-        run_command([*EASYRSA, 'init-pki'])
+        run_command([*EASYRSA, "init-pki"])
         os.chmod(EASYRSA_PKI, 0o711)
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'ca.crt')):
-        run_command([*EASYRSA, *no_pass, 'build-ca'])
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'dh.pem')):
-        run_command([*EASYRSA, 'gen-dh'])
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'reqs', f'{SERVER_EASYRSA_ID}.req')):
-        run_command([*EASYRSA, f'--req-cn={config.server}', 'gen-req', SERVER_EASYRSA_ID, 'nopass'])
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{SERVER_EASYRSA_ID}.crt')):
-        run_command([*EASYRSA, f'--days={server_cert_validity}', 'sign-req', 'server', SERVER_EASYRSA_ID])
+    if not os.path.exists(os.path.join(EASYRSA_PKI, "ca.crt")):
+        run_command([*EASYRSA, *no_pass, "build-ca"])
+    if not os.path.exists(os.path.join(EASYRSA_PKI, "dh.pem")):
+        run_command([*EASYRSA, "gen-dh"])
+    if not os.path.exists(
+        os.path.join(EASYRSA_PKI, "reqs", f"{SERVER_EASYRSA_ID}.req")
+    ):
+        run_command(
+            [
+                *EASYRSA,
+                f"--req-cn={config.server}",
+                "gen-req",
+                SERVER_EASYRSA_ID,
+                "nopass",
+            ]
+        )
+    if not os.path.exists(
+        os.path.join(EASYRSA_PKI, "issued", f"{SERVER_EASYRSA_ID}.crt")
+    ):
+        run_command(
+            [
+                *EASYRSA,
+                f"--days={server_cert_validity}",
+                "sign-req",
+                "server",
+                SERVER_EASYRSA_ID,
+            ]
+        )
     update_crl()
 
 
 def init_openvpn(config: Config):
-    logger.info('Initializing OpenVPN server configuration.')
+    logger.info("Initializing OpenVPN server configuration.")
     if not os.path.exists(OPENVPN_DIR):
-        logger.info(f'Initializing OpenVPN directory {OPENVPN_DIR}.')
+        logger.info(f"Initializing OpenVPN directory {OPENVPN_DIR}.")
         os.makedirs(OPENVPN_DIR)
     else:
-        logger.warning(f'OpenVPN directory {OPENVPN_DIR} already exists, overwriting configuration...')
-        logger.warning('Old client configuration could became invalid, consider regenerating them.')
-    if not os.path.exists(os.path.join(OPENVPN_DIR, 'ta.key')):
-        run_command(['openvpn', '--genkey', 'secret', 'ta.key'], cwd=OPENVPN_DIR)
+        logger.warning(
+            f"OpenVPN directory {OPENVPN_DIR} already exists, overwriting configuration..."
+        )
+        logger.warning(
+            "Old client configuration could became invalid, consider regenerating them."
+        )
+    if not os.path.exists(os.path.join(OPENVPN_DIR, "ta.key")):
+        run_command(["openvpn", "--genkey", "secret", "ta.key"], cwd=OPENVPN_DIR)
 
-    logger.info('Creating server configuration.')
+    logger.info("Creating server configuration.")
 
     config_options = [
-        f'server {normalize_address(config.network)}',
-        'verb 3',
-        f'proto {config.protocol}',
-        'port 1194',
-        f'dev {config.device}0',
-        'topology subnet',
-
-        'keepalive 10 60',
-        'persist-key',
-        'persist-tun',
-
-        f'ca {EASYRSA_PKI}/ca.crt',
-        f'key {EASYRSA_PKI}/private/{SERVER_EASYRSA_ID}.key',
-        f'cert {EASYRSA_PKI}/issued/{SERVER_EASYRSA_ID}.crt',
-        f'dh {EASYRSA_PKI}/dh.pem',
-        f'tls-auth {OPENVPN_DIR}/ta.key 0',
-        f'crl-verify {EASYRSA_PKI}/crl.pem',
-
-        'status /tmp/openvpn-status.log',
-        'user nobody',
-        'group nogroup',
+        f"server {normalize_address(config.network)}",
+        "verb 3",
+        f"proto {config.protocol}",
+        "port 1194",
+        f"dev {config.device}0",
+        "topology subnet",
+        "keepalive 10 60",
+        "persist-key",
+        "persist-tun",
+        f"ca {EASYRSA_PKI}/ca.crt",
+        f"key {EASYRSA_PKI}/private/{SERVER_EASYRSA_ID}.key",
+        f"cert {EASYRSA_PKI}/issued/{SERVER_EASYRSA_ID}.crt",
+        f"dh {EASYRSA_PKI}/dh.pem",
+        f"tls-auth {OPENVPN_DIR}/ta.key 0",
+        f"crl-verify {EASYRSA_PKI}/crl.pem",
+        "status /tmp/openvpn-status.log",
+        "user nobody",
+        "group nogroup",
     ]
 
     if config.network6:
-        config_options.append(f'server-ipv6 {config.network6}')
+        config_options.append(f"server-ipv6 {config.network6}")
 
     for subnet in config.routes:
-        subnet_split = subnet.split(' ')
-        subnet = ' '.join([normalize_address(subnet_split[0]), *subnet_split[1:]])
+        subnet_split = subnet.split(" ")
+        subnet = " ".join([normalize_address(subnet_split[0]), *subnet_split[1:]])
         config_options.append(f'push "route {subnet}"')
 
     for subnet in config.route6s:
@@ -248,14 +286,14 @@ def init_openvpn(config: Config):
         config_options.append(f'push "dhcp-option DNS {dns_server}"')
 
     if config.client_to_client:
-        config_options.append('client-to-client')
+        config_options.append("client-to-client")
 
     if config.duplicate_cn:
-        config_options.append('duplicate-cn')
+        config_options.append("duplicate-cn")
 
     if config.comp_lzo:
-        logger.warning('LZO compression is deprecated and not recommended.')
-        config_options.append('comp-lzo yes')
+        logger.warning("LZO compression is deprecated and not recommended.")
+        config_options.append("comp-lzo yes")
         config_options.append('push "comp-lzo yes"')
 
     if config.block_outside_dns:
@@ -263,36 +301,38 @@ def init_openvpn(config: Config):
 
     config_options.extend(config.extra_server_configs)
 
-    with open(os.path.join(OPENVPN_DIR, 'server.conf'), 'w', encoding='utf-8') as f:
-        f.writelines(line + '\n' for line in config_options)
+    with open(os.path.join(OPENVPN_DIR, "server.conf"), "w", encoding="utf-8") as f:
+        f.writelines(line + "\n" for line in config_options)
 
 
 def init(config: Config, args: argparse.Namespace) -> int:
     if args.ca_pass and not sys.stdin.isatty():
-        logger.error('CA password required, but stdin is not a tty.')
+        logger.error("CA password required, but stdin is not a tty.")
         return 1
     init_easy_rsa(config, args)
     init_openvpn(config)
-    logger.info('Initialization complete.')
+    logger.info("Initialization complete.")
     return 0
 
 
 def update_crl():
-    logger.info('Updating CRL file.')
+    logger.info("Updating CRL file.")
     server_expiration = get_cert_expiration(SERVER_EASYRSA_ID)
-    days = (server_expiration - datetime.now(tz=UTC)).days + 1  # Up to one day longer then server cert
-    run_command([*EASYRSA, f'--days={days}', 'gen-crl'])
-    os.chmod(os.path.join(EASYRSA_PKI, 'crl.pem'), 0o644)
+    days = (
+        server_expiration - datetime.now(tz=UTC)
+    ).days + 1  # Up to one day longer then server cert
+    run_command([*EASYRSA, f"--days={days}", "gen-crl"])
+    os.chmod(os.path.join(EASYRSA_PKI, "crl.pem"), 0o644)
 
 
 def start(config: Config, readonly: bool = False) -> int:
-    logger.info('Preparing environment...')
-    os.makedirs('/dev/net', exist_ok=True)
-    if not os.path.exists('/dev/net/tun'):
-        os.mknod('/dev/net/tun', mode=stat.S_IFCHR, device=os.makedev(10, 200))
+    logger.info("Preparing environment...")
+    os.makedirs("/dev/net", exist_ok=True)
+    if not os.path.exists("/dev/net/tun"):
+        os.mknod("/dev/net/tun", mode=stat.S_IFCHR, device=os.makedev(10, 200))
 
     def check_sysctl(name, sysctl, value, error=False):
-        with open(os.path.join('/proc/sys', *sysctl.split('.')), 'r') as f:
+        with open(os.path.join("/proc/sys", *sysctl.split(".")), "r") as f:
             current_value = f.read().strip()
             if current_value != str(value):
                 msg = f'{name} is set to {current_value}. Set it with sysctl "{sysctl}={value}"'
@@ -305,123 +345,176 @@ def start(config: Config, readonly: bool = False) -> int:
     if not readonly:
         renew_server_cert(config)
 
-    check_sysctl('IPv4 forwarding', 'net.ipv4.ip_forward', 1, error=False)
+    check_sysctl("IPv4 forwarding", "net.ipv4.ip_forward", 1, error=False)
 
     if config.ipv6:
-        check_sysctl('IPv6 disable', 'net.ipv6.conf.default.disable_ipv6', 0, error=True)
-        check_sysctl('IPv6 disable', f'net.ipv6.conf.{config.interface}.disable_ipv6', 0, error=False)
-        check_sysctl('IPv6 forwarding', 'net.ipv6.conf.all.forwarding', 1, error=False)
+        check_sysctl(
+            "IPv6 disable", "net.ipv6.conf.default.disable_ipv6", 0, error=True
+        )
+        check_sysctl(
+            "IPv6 disable",
+            f"net.ipv6.conf.{config.interface}.disable_ipv6",
+            0,
+            error=False,
+        )
+        check_sysctl("IPv6 forwarding", "net.ipv6.conf.all.forwarding", 1, error=False)
 
     if config.nat:
         # silently remove existing iptables rule if exists
-        run_command(['iptables',
-                     '-t', 'nat',
-                     '-D', 'POSTROUTING',
-                     '-s', config.network,
-                     '-o', config.interface,
-                     '-j', 'MASQUERADE'],
-                    check=False,
-                    stderr=subprocess.DEVNULL)
-        run_command(['iptables',
-                     '-t', 'nat',
-                     '-A', 'POSTROUTING',
-                     '-s', config.network,
-                     '-o', config.interface,
-                     '-j', 'MASQUERADE'])
+        run_command(
+            [
+                "iptables",
+                "-t",
+                "nat",
+                "-D",
+                "POSTROUTING",
+                "-s",
+                config.network,
+                "-o",
+                config.interface,
+                "-j",
+                "MASQUERADE",
+            ],
+            check=False,
+            stderr=subprocess.DEVNULL,
+        )
+        run_command(
+            [
+                "iptables",
+                "-t",
+                "nat",
+                "-A",
+                "POSTROUTING",
+                "-s",
+                config.network,
+                "-o",
+                config.interface,
+                "-j",
+                "MASQUERADE",
+            ]
+        )
 
     if config.ipv6 and config.nat6:
+        assert config.network6 is not None
         # silently remove existing iptables rule if exists
-        run_command(['ip6tables',
-                     '-t', 'nat',
-                     '-D', 'POSTROUTING',
-                     '-s', config.network6,
-                     '-o', config.interface,
-                     '-j', 'MASQUERADE'],
-                    check=False,
-                    stderr=subprocess.DEVNULL)
-        run_command(['ip6tables',
-                     '-t', 'nat',
-                     '-A', 'POSTROUTING',
-                     '-s', config.network6,
-                     '-o', config.interface,
-                     '-j', 'MASQUERADE'])
+        run_command(
+            [
+                "ip6tables",
+                "-t",
+                "nat",
+                "-D",
+                "POSTROUTING",
+                "-s",
+                config.network6,
+                "-o",
+                config.interface,
+                "-j",
+                "MASQUERADE",
+            ],
+            check=False,
+            stderr=subprocess.DEVNULL,
+        )
+        run_command(
+            [
+                "ip6tables",
+                "-t",
+                "nat",
+                "-A",
+                "POSTROUTING",
+                "-s",
+                config.network6,
+                "-o",
+                config.interface,
+                "-j",
+                "MASQUERADE",
+            ]
+        )
 
-    logger.info('Starting OpenVPN server:')
+    logger.info("Starting OpenVPN server:")
     return os.execvp(
-        '/bin/sh',
+        "/bin/sh",
         [
-            '/bin/sh',
-            '-c',
-            f'timeout {config.restart_interval * 24 * 60 * 60} openvpn --config {OPENVPN_DIR}/server.conf;'
-            f'exec {sys.argv[0]} start'
-        ]
+            "/bin/sh",
+            "-c",
+            f"timeout {config.restart_interval * 24 * 60 * 60} openvpn --config {OPENVPN_DIR}/server.conf;"
+            f"exec {sys.argv[0]} start",
+        ],
     )
 
 
 def new_client(config: Config, client_name: str, key_pass) -> int:
     if key_pass and not sys.stdin.isatty():
-        logger.error('Key password required, but stdin is not a tty.')
+        logger.error("Key password required, but stdin is not a tty.")
         return 1
 
     # TODO: Handle already existing clients
-    logger.info(f'Creating new client {client_name}')
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'reqs', f'{client_name}.req')):
-        run_command([*EASYRSA, f'--req-cn={client_name}', 'gen-req', client_name] +
-                    (['nopass'] if not key_pass else []))
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt')):
-        run_command([*EASYRSA, 'sign-req', 'client', client_name])
+    logger.info(f"Creating new client {client_name}")
+    if not os.path.exists(os.path.join(EASYRSA_PKI, "reqs", f"{client_name}.req")):
+        run_command(
+            [*EASYRSA, f"--req-cn={client_name}", "gen-req", client_name]
+            + (["nopass"] if not key_pass else [])
+        )
+    if not os.path.exists(os.path.join(EASYRSA_PKI, "issued", f"{client_name}.crt")):
+        run_command([*EASYRSA, "sign-req", "client", client_name])
 
     return 0
 
 
 def revoke_client(config: Config, client_name: str) -> int:
-    logger.info(f'Revoking client {client_name}.')
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt')):
-        logger.error(f'Client {client_name} does not exist')
+    logger.info(f"Revoking client {client_name}.")
+    if not os.path.exists(os.path.join(EASYRSA_PKI, "issued", f"{client_name}.crt")):
+        logger.error(f"Client {client_name} does not exist")
         return 1
-    run_command([*EASYRSA, 'revoke', client_name])
+    run_command([*EASYRSA, "revoke", client_name])
     update_crl()
     return 0
 
 
 def renew_cert(name: str, days: int | None = None) -> None:
-    if os.path.exists(os.path.join(EASYRSA_PKI, 'renewed', 'issued', f'{name}.crt')):
+    if os.path.exists(os.path.join(EASYRSA_PKI, "renewed", "issued", f"{name}.crt")):
         # Previously renewed cert exists, remove it
-        logger.warning(f'Renewed certificate for {name} already exists, removing it.')
-        run_command([*EASYRSA, 'revoke-renewed', name])
-    run_command([*EASYRSA] + ([f'--days={days+1}'] if days else []) + ['renew', name])
-    run_command([*EASYRSA, 'revoke-renewed', name])
+        logger.warning(f"Renewed certificate for {name} already exists, removing it.")
+        run_command([*EASYRSA, "revoke-renewed", name])
+    run_command([*EASYRSA] + ([f"--days={days + 1}"] if days else []) + ["renew", name])
+    run_command([*EASYRSA, "revoke-renewed", name])
 
 
 def renew_client(config: Config, client_name: str) -> int:
-    logger.info(f'Renewing client {client_name}.')
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt')):
-        logger.error(f'Client {client_name} does not exist')
+    logger.info(f"Renewing client {client_name}.")
+    if not os.path.exists(os.path.join(EASYRSA_PKI, "issued", f"{client_name}.crt")):
+        logger.error(f"Client {client_name} does not exist")
         return 1
     renew_cert(client_name)
     update_crl()
     return 0
 
 
-def renew_server_cert(config: Config, allow_encrypted: bool = False, days: int | None = None) -> None:
-    validity, date = check_cert_validity(
-        SERVER_EASYRSA_ID,
-        purpose="sslserver"
-    )
-    with open(os.path.join(EASYRSA_PKI, 'private', 'ca.key'), 'r', encoding='utf-8') as f:
-        ca_key_encrypted = 'ENCRYPTED' in f.read()
+def renew_server_cert(
+    config: Config, allow_encrypted: bool = False, days: int | None = None
+) -> None:
+    validity, date = check_cert_validity(SERVER_EASYRSA_ID, purpose="sslserver")
+    with open(
+        os.path.join(EASYRSA_PKI, "private", "ca.key"), "r", encoding="utf-8"
+    ) as f:
+        ca_key_encrypted = "ENCRYPTED" in f.read()
 
-    needs_renewal = (days is not None) or (validity != 'valid') or (date is None) or \
-                    ((date - datetime.now(tz=UTC)).days < config.restart_interval * 2)
+    needs_renewal = (
+        (days is not None)
+        or (validity != "valid")
+        or (date is None)
+        or ((date - datetime.now(tz=UTC)).days < config.restart_interval * 2)
+    )
 
     if needs_renewal:
         if ca_key_encrypted and not allow_encrypted:
-            logger.error('Server certificate needs renewal, but CA key is password protected.')
-            logger.error('Run the `renew-server` command to renew the certificate.')
+            logger.error(
+                "Server certificate needs renewal, but CA key is password protected."
+            )
+            logger.error("Run the `renew-server` command to renew the certificate.")
             sys.exit(1)
         if not days:
             days = config.restart_interval * 3
-        logger.info(f'Renewing server certificate for {days} days.')
+        logger.info(f"Renewing server certificate for {days} days.")
         renew_cert(SERVER_EASYRSA_ID, days=days)
         update_crl()
 
@@ -430,320 +523,348 @@ def get_cert_expiration(name: str) -> datetime:
     return datetime.fromisoformat(
         run_command(
             [
-                'openssl', 'x509',
-                '-noout',
-                '-enddate',
-                '-dateopt', 'iso_8601',
-                '-in', f'{EASYRSA_PKI}/issued/{name}.crt'
+                "openssl",
+                "x509",
+                "-noout",
+                "-enddate",
+                "-dateopt",
+                "iso_8601",
+                "-in",
+                f"{EASYRSA_PKI}/issued/{name}.crt",
             ],
-            stdout=subprocess.PIPE
-        ).stdout.decode('utf-8').split('=')[1].strip()
+            stdout=subprocess.PIPE,
+        )
+        .stdout.decode("utf-8")
+        .split("=")[1]
+        .strip()
     )
 
 
-def check_cert_validity(name: str, purpose: str = 'sslclient') -> tuple[str, datetime | None]:
-    verify_result = run_command(['openssl', 'verify',
-                                 '-crl_check_all',
-                                 '-purpose', purpose,
-                                 '-CAfile', f'{EASYRSA_PKI}/ca.crt',
-                                 '-CRLfile', f'{EASYRSA_PKI}/crl.pem',
-                                 f'{EASYRSA_PKI}/issued/{name}.crt'],
-                                stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, check=False)
+def check_cert_validity(
+    name: str, purpose: str = "sslclient"
+) -> tuple[str, datetime | None]:
+    verify_result = run_command(
+        [
+            "openssl",
+            "verify",
+            "-crl_check_all",
+            "-purpose",
+            purpose,
+            "-CAfile",
+            f"{EASYRSA_PKI}/ca.crt",
+            "-CRLfile",
+            f"{EASYRSA_PKI}/crl.pem",
+            f"{EASYRSA_PKI}/issued/{name}.crt",
+        ],
+        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        check=False,
+    )
 
     if verify_result.returncode == 0:
-        return 'valid', get_cert_expiration(name)
+        return "valid", get_cert_expiration(name)
     else:
-        for line in verify_result.stderr.decode('utf-8').split('\n'):
-            if line.startswith('error'):
+        for line in verify_result.stderr.decode("utf-8").split("\n"):
+            if line.startswith("error"):
                 error_code = line.split()[1]
-                if error_code == '10':
-                    return 'expired', get_cert_expiration(name)
-                if error_code == '23':
-                    return 'revoked', None
-                if error_code == '26':
-                    return 'not sslclient certificate', None
+                if error_code == "10":
+                    return "expired", get_cert_expiration(name)
+                if error_code == "23":
+                    return "revoked", None
+                if error_code == "26":
+                    return "not sslclient certificate", None
         else:
-            return 'unknown error', None
+            return "unknown error", None
 
 
 def list_clients(config: Config) -> int:
-    logger.info('Listing clients:')
-    clients = [f.rsplit('.', 1)[0] for f in
-               os.listdir(os.path.join(EASYRSA_PKI, 'issued')) if f.endswith('.crt')]
+    logger.info("Listing clients:")
+    clients = [
+        f.rsplit(".", 1)[0]
+        for f in os.listdir(os.path.join(EASYRSA_PKI, "issued"))
+        if f.endswith(".crt")
+    ]
     for client in clients:
         if client == SERVER_EASYRSA_ID:
             continue
 
         validity, expiration_date = check_cert_validity(client)
-        if validity in 'valid':
-            print(f'{client}, valid till {expiration_date}')
-        elif validity == 'expired':
-            print(f'{client}, expired on {expiration_date}')
+        if validity in "valid":
+            print(f"{client}, valid till {expiration_date}")
+        elif validity == "expired":
+            print(f"{client}, expired on {expiration_date}")
         else:  # error
-            print(f'{client}, ${validity}')
+            print(f"{client}, ${validity}")
 
     return 0
 
 
 def show_client(config: Config, client_name: str) -> int:
-    logger.debug(f'Showing client {client_name}:')
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt')):
-        logger.error(f'Client {client_name} does not exist')
+    logger.debug(f"Showing client {client_name}:")
+    if not os.path.exists(os.path.join(EASYRSA_PKI, "issued", f"{client_name}.crt")):
+        logger.error(f"Client {client_name} does not exist")
         return 1
-    with open(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt'), encoding='utf-8') as f:
+    with open(
+        os.path.join(EASYRSA_PKI, "issued", f"{client_name}.crt"), encoding="utf-8"
+    ) as f:
         print(f.read())
     return 0
 
 
 def get_client_config(config: Config, client_name: str) -> int:
-    logger.debug(f'Getting client config for {client_name}:')
-    if not os.path.exists(os.path.join(EASYRSA_PKI, 'issued', f'{client_name}.crt')):
-        logger.error(f'Client {client_name} does not exist')
+    logger.debug(f"Getting client config for {client_name}:")
+    if not os.path.exists(os.path.join(EASYRSA_PKI, "issued", f"{client_name}.crt")):
+        logger.error(f"Client {client_name} does not exist")
         return 1
 
     config_options = [
-        'client',
-        'nobind',
-        f'dev {config.device}',
-        f'remote {config.server} {config.port} {config.protocol.removesuffix("6")}',
-        'remote-cert-tls server',
-        'key-direction 1'
+        "client",
+        "nobind",
+        f"dev {config.device}",
+        f"remote {config.server} {config.port} {config.protocol.removesuffix('6')}",
+        "remote-cert-tls server",
+        "key-direction 1",
     ]
     config_options.extend(config.extra_client_configs)
 
     redirect_gateway = []
     if config.default_route:
-        redirect_gateway.append('def1')
+        redirect_gateway.append("def1")
     if config.default_route6:
-        redirect_gateway.append('ipv6')
+        redirect_gateway.append("ipv6")
     if redirect_gateway and not config.default_route:
-        redirect_gateway.append('!ipv4')
+        redirect_gateway.append("!ipv4")
     if redirect_gateway:
-        config_options.append(f'redirect-gateway {" ".join(redirect_gateway)}')
+        config_options.append(f"redirect-gateway {' '.join(redirect_gateway)}")
 
-    sys.stdout.writelines(line + '\n' for line in config_options)
+    sys.stdout.writelines(line + "\n" for line in config_options)
 
     for key, file in {
-        'key': f'{EASYRSA_PKI}/private/{client_name}.key',
-        'cert': f'{EASYRSA_PKI}/issued/{client_name}.crt',
-        'ca': f'{EASYRSA_PKI}/ca.crt',
-        'tls-auth': f'{OPENVPN_DIR}/ta.key',
+        "key": f"{EASYRSA_PKI}/private/{client_name}.key",
+        "cert": f"{EASYRSA_PKI}/issued/{client_name}.crt",
+        "ca": f"{EASYRSA_PKI}/ca.crt",
+        "tls-auth": f"{OPENVPN_DIR}/ta.key",
     }.items():
-        sys.stdout.write(f'<{key}>\n')
-        with open(file, encoding='utf-8') as f:
+        sys.stdout.write(f"<{key}>\n")
+        with open(file, encoding="utf-8") as f:
             sys.stdout.write(f.read())
-        sys.stdout.write(f'</{key}>\n')
+        sys.stdout.write(f"</{key}>\n")
 
     return 0
 
 
 def parse_args(config: Config) -> argparse.Namespace:
-    class replace_append(argparse.Action):    # noqa N801
+    class replace_append(argparse.Action):  # noqa N801
         def __call__(self, parser, namespace, values, option_string=None):
             if getattr(namespace, self.dest, None) is None:
                 setattr(namespace, self.dest, [])
             getattr(namespace, self.dest).append(values)
 
     def add_argument(_parser: argparse.ArgumentParser, arg: str, **kwargs):
-        config_var = arg.replace('-', '_')
-        if kwargs.get('action') == 'append':
-            kwargs['action'] = replace_append
-            config_var += 's'
-            kwargs['dest'] = config_var
+        config_var = arg.replace("-", "_")
+        if kwargs.get("action") == "append":
+            kwargs["action"] = replace_append
+            config_var += "s"
+            kwargs["dest"] = config_var
         if config_var in config.__dict__:
             default = config.__dict__[config_var]
             if default is None:
-                if 'required' not in kwargs:
-                    kwargs['required'] = True
+                if "required" not in kwargs:
+                    kwargs["required"] = True
             else:
-                kwargs['default'] = config.__dict__[config_var]
+                kwargs["default"] = config.__dict__[config_var]
 
-        if 'default' in kwargs:
-            kwargs['help'] = f'{kwargs["help"]} (default: {kwargs["default"]})'
+        if "default" in kwargs:
+            kwargs["help"] = f"{kwargs['help']} (default: {kwargs['default']})"
 
-        if kwargs.get('action') == replace_append:
+        if kwargs.get("action") == replace_append:
             _parser = _parser.add_mutually_exclusive_group()  # type: ignore[assignment]
-            _parser.add_argument(f'--no-{arg}s',
-                                 action='store_const',
-                                 const=[],
-                                 dest=config_var,
-                                 help=f'Clear {arg}')
-        _parser.add_argument(f'--{arg}', **kwargs)
+            _parser.add_argument(
+                f"--no-{arg}s",
+                action="store_const",
+                const=[],
+                dest=config_var,
+                help=f"Clear {arg}",
+            )
+        _parser.add_argument(f"--{arg}", **kwargs)
 
     def add_tristate_argument(_parser: argparse.ArgumentParser, arg: str, **kwargs):
         _group = _parser.add_mutually_exclusive_group()
-        arg_var = arg.replace('-', '_')
-        default = config.__dict__.get(arg_var, kwargs.get('default'))
-        _help = kwargs['help']
+        arg_var = arg.replace("-", "_")
+        default = config.__dict__.get(arg_var, kwargs.get("default"))
+        _help = kwargs["help"]
 
         if default is None:
-            kwargs['help'] = f'{_help} (default: unset)'
+            kwargs["help"] = f"{_help} (default: unset)"
 
         # Add --arg option
-        kwargs['default'] = default
+        kwargs["default"] = default
         if default:
-            kwargs['help'] = f'{_help} (default)'
-        _group.add_argument(f'--{arg}',
-                            dest=arg_var,
-                            action='store_true',
-                            **kwargs)
+            kwargs["help"] = f"{_help} (default)"
+        _group.add_argument(f"--{arg}", dest=arg_var, action="store_true", **kwargs)
 
         # Add --no-arg option
         if default is not None:
             default = not default
-        _help = f'Disable {arg}'
-        kwargs['help'] = _help
-        kwargs['default'] = default
+        _help = f"Disable {arg}"
+        kwargs["help"] = _help
+        kwargs["default"] = default
         if default:
-            kwargs['help'] = f'{_help} (default)'
-        _group.add_argument(f'--no-{arg}',
-                            action='store_false',
-                            dest=arg_var,
-                            **kwargs)
+            kwargs["help"] = f"{_help} (default)"
+        _group.add_argument(f"--no-{arg}", action="store_false", dest=arg_var, **kwargs)
 
-    parser = argparse.ArgumentParser(description='docker-openvpn control script')
-    parser.add_argument('--verbose', '-v',
-                        action='store_true',
-                        help='Enable verbose logging',
-                        default=False)
-    action_parsers = parser.add_subparsers(dest='action',
-                                           help='Action to perform',
-                                           required=True)
-    init_parser = action_parsers.add_parser('init',
-                                            help='Initialize OpenVPN server')
+    parser = argparse.ArgumentParser(description="docker-openvpn control script")
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose logging",
+        default=False,
+    )
+    action_parsers = parser.add_subparsers(
+        dest="action", help="Action to perform", required=True
+    )
+    init_parser = action_parsers.add_parser("init", help="Initialize OpenVPN server")
 
-    add_tristate_argument(init_parser,
-                          'ca-pass',
-                          help='Require password for CA key',
-                          default=False)
+    add_tristate_argument(
+        init_parser, "ca-pass", help="Require password for CA key", default=False
+    )
 
-    add_argument(init_parser,
-                 'server',
-                 help='Server name')
-    add_argument(init_parser,
-                 'protocol',
-                 choices=['udp', 'udp6', 'tcp', 'tcp6'],
-                 help='Server protocol')
-    add_argument(init_parser,
-                 'port',
-                 help='Server port')
-    add_argument(init_parser,
-                 'restart-interval',
-                 help='Server restart interval in days',)
-    add_tristate_argument(init_parser,
-                          'ipv6',
-                          help='Enable IPv6 support')
-    add_argument(init_parser,
-                 'network',
-                 help='Network CIDR to use')
-    add_argument(init_parser,
-                 'network6',
-                 required=False,
-                 help='IPv6 network CIDR to use (generate ULA if unset)')
-    add_argument(init_parser,
-                 'device',
-                 choices=['tun', 'tap'],
-                 help='Device to use')
-    add_argument(init_parser,
-                 'interface',
-                 help='Interface to use')
-    add_tristate_argument(init_parser,
-                          'nat',
-                          help='NAT (masquerade) traffic from clients to the internet')
-    add_tristate_argument(init_parser,
-                          'nat6',
-                          help='NAT (masquerade) IPv6 traffic from clients to the internet (equal to --nat if unset)')
-    add_tristate_argument(init_parser,
-                          'comp-lzo',
-                          help='Enable LZO compression (DEPRECATED)')
-    add_argument(init_parser,
-                 'dns-server',
-                 help='DNS server to use',
-                 action='append')
-    add_tristate_argument(init_parser,
-                          'duplicate-cn',
-                          help='Allow multiple clients with same CN')
-    add_tristate_argument(init_parser,
-                          'block-outside-dns',
-                          help='Block DNS outside of tunnel')
-    add_tristate_argument(init_parser,
-                          'client-to-client',
-                          help='Enable client-to-client communication')
-    add_tristate_argument(init_parser,
-                          'default-route',
-                          help='Push default IPv4 route to clients')
-    add_tristate_argument(init_parser,
-                          'default-route6',
-                          help='Push default IPv6 route to clients (equal to --default-route if unset)')
-    add_argument(init_parser,
-                 'route',
-                 help='Additional IPv4 route to push to clients',
-                 action='append')
-    add_argument(init_parser,
-                 'route6',
-                 help='Additional IPv6 route to push to clients',
-                 action='append')
+    add_argument(init_parser, "server", help="Server name")
+    add_argument(
+        init_parser,
+        "protocol",
+        choices=["udp", "udp6", "tcp", "tcp6"],
+        help="Server protocol",
+    )
+    add_argument(init_parser, "port", help="Server port")
+    add_argument(
+        init_parser,
+        "restart-interval",
+        help="Server restart interval in days",
+    )
+    add_tristate_argument(init_parser, "ipv6", help="Enable IPv6 support")
+    add_argument(init_parser, "network", help="Network CIDR to use")
+    add_argument(
+        init_parser,
+        "network6",
+        required=False,
+        help="IPv6 network CIDR to use (generate ULA if unset)",
+    )
+    add_argument(init_parser, "device", choices=["tun", "tap"], help="Device to use")
+    add_argument(init_parser, "interface", help="Interface to use")
+    add_tristate_argument(
+        init_parser, "nat", help="NAT (masquerade) traffic from clients to the internet"
+    )
+    add_tristate_argument(
+        init_parser,
+        "nat6",
+        help="NAT (masquerade) IPv6 traffic from clients to the internet (equal to --nat if unset)",
+    )
+    add_tristate_argument(
+        init_parser, "comp-lzo", help="Enable LZO compression (DEPRECATED)"
+    )
+    add_argument(init_parser, "dns-server", help="DNS server to use", action="append")
+    add_tristate_argument(
+        init_parser, "duplicate-cn", help="Allow multiple clients with same CN"
+    )
+    add_tristate_argument(
+        init_parser, "block-outside-dns", help="Block DNS outside of tunnel"
+    )
+    add_tristate_argument(
+        init_parser, "client-to-client", help="Enable client-to-client communication"
+    )
+    add_tristate_argument(
+        init_parser, "default-route", help="Push default IPv4 route to clients"
+    )
+    add_tristate_argument(
+        init_parser,
+        "default-route6",
+        help="Push default IPv6 route to clients (equal to --default-route if unset)",
+    )
+    add_argument(
+        init_parser,
+        "route",
+        help="Additional IPv4 route to push to clients",
+        action="append",
+    )
+    add_argument(
+        init_parser,
+        "route6",
+        help="Additional IPv6 route to push to clients",
+        action="append",
+    )
 
-    add_argument(init_parser,
-                 'extra-server-config',
-                 help='Extra server configuration',
-                 action='append')
-    add_argument(init_parser,
-                 'extra-client-config',
-                 help='Extra client configuration',
-                 action='append')
+    add_argument(
+        init_parser,
+        "extra-server-config",
+        help="Extra server configuration",
+        action="append",
+    )
+    add_argument(
+        init_parser,
+        "extra-client-config",
+        help="Extra client configuration",
+        action="append",
+    )
 
-    renew_server_parser = action_parsers.add_parser('renew-server',
-                                                    help='Renew server certificate')
-    renew_server_parser.add_argument('--days',
-                                     default=365*3,
-                                     type=int,
-                                     help='Certificate validity in days (default: 365*3)')
+    renew_server_parser = action_parsers.add_parser(
+        "renew-server", help="Renew server certificate"
+    )
+    renew_server_parser.add_argument(
+        "--days",
+        default=365 * 3,
+        type=int,
+        help="Certificate validity in days (default: 365*3)",
+    )
 
-    start_parser = action_parsers.add_parser('start',
-                                             help='Start OpenVPN server')
-    start_parser.add_argument('--readonly',
-                              action='store_true',
-                              help='Use /data in readonly mode, do not renew server certificate',
-                              default=False)
+    start_parser = action_parsers.add_parser("start", help="Start OpenVPN server")
+    start_parser.add_argument(
+        "--readonly",
+        action="store_true",
+        help="Use /data in readonly mode, do not renew server certificate",
+        default=False,
+    )
 
-    new_client_parser = action_parsers.add_parser('new-client',
-                                                  help='Create new client certificate')
-    new_client_parser.add_argument('client_name',
-                                   help='Client name')
-    add_tristate_argument(new_client_parser,
-                          'key-pass',
-                          help='Require password for private key',
-                          default=False)
+    new_client_parser = action_parsers.add_parser(
+        "new-client", help="Create new client certificate"
+    )
+    new_client_parser.add_argument("client_name", help="Client name")
+    add_tristate_argument(
+        new_client_parser,
+        "key-pass",
+        help="Require password for private key",
+        default=False,
+    )
 
-    revoke_client_parser = action_parsers.add_parser('revoke-client',
-                                                     help='Revoke client certificate')
-    revoke_client_parser.add_argument('client_name',
-                                      help='Client name')
+    revoke_client_parser = action_parsers.add_parser(
+        "revoke-client", help="Revoke client certificate"
+    )
+    revoke_client_parser.add_argument("client_name", help="Client name")
 
-    renew_client_parser = action_parsers.add_parser('renew-client',
-                                                    help='Renew client certificate')
-    renew_client_parser.add_argument('client_name',
-                                     help='Client name')
+    renew_client_parser = action_parsers.add_parser(
+        "renew-client", help="Renew client certificate"
+    )
+    renew_client_parser.add_argument("client_name", help="Client name")
 
-    list_clients_parser = action_parsers.add_parser('list-clients',
-                                                    help='List clients')
+    # list_clients_parser =
+    action_parsers.add_parser("list-clients", help="List clients")
 
-    show_client_parser = action_parsers.add_parser('show-client',
-                                                   help='Show client certificate')
-    show_client_parser.add_argument('client_name',
-                                    help='Client name')
+    show_client_parser = action_parsers.add_parser(
+        "show-client", help="Show client certificate"
+    )
+    show_client_parser.add_argument("client_name", help="Client name")
 
-    get_client_config_parser = action_parsers.add_parser('get-client-config',
-                                                         help='Get client config')
-    get_client_config_parser.add_argument('client_name',
-                                          help='Client name')
+    get_client_config_parser = action_parsers.add_parser(
+        "get-client-config", help="Get client config"
+    )
+    get_client_config_parser.add_argument("client_name", help="Client name")
 
     return parser.parse_args()
 
 
 def main():
-    config = Config(os.path.join(DATA_DIR, 'control.conf'))
+    config = Config(os.path.join(DATA_DIR, "control.conf"))
     args = parse_args(config)
 
     if args.verbose:
@@ -751,42 +872,44 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    logger.debug('Starting docker-openvpn script')
-    logger.debug(f'Action: {args.action}')
+    logger.debug("Starting docker-openvpn script")
+    logger.debug(f"Action: {args.action}")
 
     if not os.path.exists(DATA_DIR):
-        logger.error(f'Data directory {DATA_DIR} does not exist, may be missing volume mount.')
+        logger.error(
+            f"Data directory {DATA_DIR} does not exist, may be missing volume mount."
+        )
         return 1
 
-    if args.action == 'init':
+    if args.action == "init":
         config.update(args=args)
         config.validate()
-        config.save(os.path.join(DATA_DIR, 'control.conf'))
+        config.save(os.path.join(DATA_DIR, "control.conf"))
         return init(config, args)
 
     if not os.path.exists(EASYRSA_PKI) or not os.path.exists(OPENVPN_DIR):
-        logger.error('OpenVPN server was not initialized, run init first.')
+        logger.error("OpenVPN server was not initialized, run init first.")
         return 1
 
-    if args.action == 'start':
+    if args.action == "start":
         return start(config, args.readonly)
-    if args.action == 'renew-server':
+    if args.action == "renew-server":
         return renew_server_cert(config, allow_encrypted=True, days=args.days)
-    if args.action == 'new-client':
+    if args.action == "new-client":
         return new_client(config, args.client_name, args.key_pass)
-    if args.action == 'revoke-client':
+    if args.action == "revoke-client":
         return revoke_client(config, args.client_name)
-    if args.action == 'renew-client':
+    if args.action == "renew-client":
         return renew_client(config, args.client_name)
-    if args.action == 'list-clients':
+    if args.action == "list-clients":
         return list_clients(config)
-    if args.action == 'show-client':
+    if args.action == "show-client":
         return show_client(config, args.client_name)
-    if args.action == 'get-client-config':
+    if args.action == "get-client-config":
         return get_client_config(config, args.client_name)
 
-    raise NotImplementedError(f'Action {args.action} not implemented.')
+    raise NotImplementedError(f"Action {args.action} not implemented.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())
