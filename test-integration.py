@@ -18,6 +18,7 @@
 # limitations under the License.
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -49,16 +50,12 @@ class IntegrationTests:
         """Clean up test data directory"""
         print(f"{Colors.YELLOW}Cleaning up test data...{Colors.NC}")
         if os.path.exists(self.test_data_dir):
-            # Fix permissions before cleanup
+            # Fix permissions before cleanup using Docker
             try:
                 self._run_docker_command(['sh', '-c', f'chown -R {os.getuid()}:{os.getgid()} /data'], 
                                         capture_output=True)
             except subprocess.CalledProcessError:
-                try:
-                    subprocess.run(['sudo', 'chown', '-R', os.getenv('USER', 'runner'), 
-                                  self.test_data_dir], capture_output=True)
-                except subprocess.CalledProcessError:
-                    pass
+                pass
             shutil.rmtree(self.test_data_dir, ignore_errors=True)
     
     def _run_docker_command(self, args: list, capture_output: bool = False) -> subprocess.CompletedProcess:
@@ -123,9 +120,9 @@ class IntegrationTests:
         
         try:
             with open(config_path, 'r') as f:
-                config = f.read()
+                config = json.load(f)
             
-            if '"server": "vpn.example.com"' in config and '"port": 7777' in config:
+            if config.get('server') == 'vpn.example.com' and config.get('port') == 7777:
                 self.pass_test("Configuration file contains correct values")
             else:
                 self.fail_test("Configuration file missing expected values")
@@ -141,11 +138,11 @@ class IntegrationTests:
         if result.returncode == 0:
             try:
                 with open(f"{self.test_data_dir}/control.conf", 'r') as f:
-                    config = f.read()
+                    config = json.load(f)
                 
-                if ('"server": "vpn.updated.com"' in config and 
-                    '"port": 8888' in config and 
-                    '"protocol": "tcp"' in config):
+                if (config.get('server') == 'vpn.updated.com' and 
+                    config.get('port') == 8888 and 
+                    config.get('protocol') == 'tcp'):
                     self.pass_test("Configuration update")
                 else:
                     self.fail_test("Configuration update - values not updated")
@@ -163,11 +160,11 @@ class IntegrationTests:
         if result.returncode == 0:
             try:
                 with open(f"{self.test_data_dir}/control.conf", 'r') as f:
-                    config = f.read()
+                    config = json.load(f)
                 
-                if ('"server": "vpn.updated.com"' in config and 
-                    '"port": 9999' in config and 
-                    '"protocol": "tcp"' in config):  # Should be preserved from previous test
+                if (config.get('server') == 'vpn.updated.com' and 
+                    config.get('port') == 9999 and 
+                    config.get('protocol') == 'tcp'):  # Should be preserved from previous test
                     self.pass_test("Partial configuration update")
                 else:
                     self.fail_test("Partial configuration update - values not preserved")
@@ -280,9 +277,9 @@ class IntegrationTests:
         if result.returncode == 0:
             try:
                 with open(f"{self.test_data_dir}/control.conf", 'r') as f:
-                    config = f.read()
+                    config = json.load(f)
                 
-                if '"ipv6": true' in config and '"network6":' in config:
+                if config.get('ipv6') == True and 'network6' in config:
                     self.pass_test("IPv6 initialization")
                 else:
                     self.fail_test("IPv6 initialization - config missing IPv6 settings")
@@ -303,9 +300,9 @@ class IntegrationTests:
         if result.returncode == 0:
             try:
                 with open(f"{self.test_data_dir}/control.conf", 'r') as f:
-                    config = f.read()
+                    config = json.load(f)
                 
-                if '"network": "10.8.0.0/24"' in config:
+                if config.get('network') == '10.8.0.0/24':
                     self.pass_test("Custom network configuration")
                 else:
                     self.fail_test("Custom network configuration - network not set correctly")
@@ -327,9 +324,10 @@ class IntegrationTests:
         if result.returncode == 0:
             try:
                 with open(f"{self.test_data_dir}/control.conf", 'r') as f:
-                    config = f.read()
+                    config = json.load(f)
                 
-                if '"1.1.1.1"' in config and '"8.8.4.4"' in config:
+                dns_servers = config.get('dns_servers', [])
+                if '1.1.1.1' in dns_servers and '8.8.4.4' in dns_servers:
                     self.pass_test("Custom DNS servers configuration")
                 else:
                     self.fail_test("Custom DNS servers configuration - DNS servers not set correctly")
@@ -351,9 +349,10 @@ class IntegrationTests:
         if result.returncode == 0:
             try:
                 with open(f"{self.test_data_dir}/control.conf", 'r') as f:
-                    config = f.read()
+                    config = json.load(f)
                 
-                if '"192.168.1.0/24"' in config and '"192.168.2.0/24"' in config:
+                routes = config.get('routes', [])
+                if '192.168.1.0/24' in routes and '192.168.2.0/24' in routes:
                     self.pass_test("Additional routes configuration")
                 else:
                     self.fail_test("Additional routes configuration - routes not set correctly")
